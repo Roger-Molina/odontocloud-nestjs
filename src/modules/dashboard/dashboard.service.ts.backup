@@ -1,0 +1,793 @@
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, Between, MoreThanOrEqual } from "typeorm";
+import { OdontogramaService } from "../odontograma/odontograma.service";
+import { BillingService } from "../billing/billing.service";
+import { MedicalRecordsService } from "../medical-records/medical-records.service";
+import { AppointmentsService } from "../appointments/appointments.service";
+import { PatientsService } from "../patients/patients.service";
+import { Appointment } from "../appointments/entities/appointment.entity";
+import { Patient } from "../patients/entities/patient.entity";
+import { MedicalRecord } from "../medical-records/entities/medical-record.entity";
+import { User, UserRole } from "../users/entities/user.entity";
+import { Doctor } from "../doctors/entities/doctor.entity";
+import { Clinic, ClinicStatus } from "../clinics/entities/clinic.entity";
+
+@Injectable()
+export class DashboardService {
+  constructor(
+    @InjectRepository(Appointment)
+    private appointmentRepository: Repository<Appointment>,
+    @InjectRepository(Patient)
+    private patientRepository: Repository<Patient>,
+    @InjectRepository(MedicalRecord)
+    private medicalRecordRepository: Repository<MedicalRecord>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @InjectRepository(Doctor)
+    private doctorRepository: Repository<Doctor>,
+    @InjectRepository(Clinic)
+    private clinicRepository: Repository<Clinic>,
+    private odontogramaService: OdontogramaService,
+    private billingService: BillingService,
+    private medicalRecordsService: MedicalRecordsService,
+    private appointmentsService: AppointmentsService,
+    private patientsService: PatientsService,
+  ) {}
+
+  async getDoctorDashboard(
+    doctorId: number,
+    clinicId?: number,
+    period: "day" | "week" | "month" | "year" = "month",
+  ) {
+    const today = new Date();
+    const startDate = this.getStartDate(today, period);
+
+    // Obtener estadísticas de citas del doctor
+    const appointmentStats = await this.getDoctorAppointmentStats(
+      doctorId,
+      startDate,
+      today,
+      clinicId,
+    );
+
+    // Obtener estadísticas de pacientes del doctor
+    const patientStats = await this.getDoctorPatientStats(
+      doctorId,
+      startDate,
+      today,
+      clinicId,
+    );
+
+    // Obtener estadísticas de odontogramas
+    const odontogramStats = await this.odontogramaService.getStatistics(clinicId);
+
+    // Obtener estadísticas de facturación del doctor
+    const billingStats = await this.getDoctorBillingStats(
+      doctorId,
+      startDate,
+      today,
+      clinicId,
+    );
+
+    // Obtener próximas citas del doctor
+    const upcomingAppointments = await this.getDoctorUpcomingAppointments(
+      doctorId,
+      clinicId,
+    );
+
+    // Obtener registros médicos recientes del doctor
+    const recentMedicalRecords = await this.getDoctorRecentMedicalRecords(
+      doctorId,
+      clinicId,
+    );
+
+    return {
+      period,
+      dateRange: {
+        start: startDate,
+        end: today,
+      },
+      appointments: appointmentStats,
+      patients: patientStats,
+      odontograms: odontogramStats,
+      billing: billingStats,
+      upcomingAppointments,
+      recentMedicalRecords,
+      summary: {
+        totalAppointments: appointmentStats.total,
+        completedAppointments: appointmentStats.completed,
+        cancelledAppointments: appointmentStats.cancelled,
+        totalPatients: patientStats.total,
+        newPatients: patientStats.new,
+        totalRevenue: billingStats.totalRevenue,
+        pendingBills: billingStats.pending,
+      },
+    };
+  }
+
+  async getAdminDashboard(
+    clinicId?: number,
+    period: "day" | "week" | "month" | "year" = "month",
+  ) {
+    const today = new Date();
+    const startDate = this.getStartDate(today, period);
+
+    // Estadísticas generales del sistema
+    const systemStats = await this.getSystemStats(startDate, today, clinicId);
+    
+    // Estadísticas de clínicas
+    const clinicStats = await this.getClinicStats(startDate, today, clinicId);
+    
+    // Estadísticas de usuarios y doctores
+    const userStats = await this.getUserStats(startDate, today, clinicId);
+    
+    // Estadísticas de citas globales
+    const appointmentStats = await this.getAppointmentStats(
+      startDate,
+      today,
+      clinicId,
+    );
+
+    // Estadísticas de pacientes globales
+    const patientStats = await this.getPatientStats(startDate, today, clinicId);
+
+    // Estadísticas financieras
+    const billingStats = await this.billingService.getBillingStats(
+      clinicId,
+      period,
+    );
+
+    // Estadísticas de odontogramas
+    const odontogramStats = await this.odontogramaService.getStatistics(clinicId);
+
+    // Top performers y métricas avanzadas
+    const performanceStats = await this.getPerformanceStats(startDate, today, clinicId);
+
+    return {
+      period,
+      dateRange: {
+        start: startDate,
+        end: today,
+      },
+      system: systemStats,
+      clinics: clinicStats,
+      users: userStats,
+      appointments: appointmentStats,
+      patients: patientStats,
+      billing: billingStats,
+      odontograms: odontogramStats,
+      performance: performanceStats,
+      summary: {
+        totalClinics: clinicStats.total,
+        totalUsers: userStats.total,
+        totalDoctors: userStats.doctors,
+        totalAppointments: appointmentStats.total,
+        totalPatients: patientStats.total,
+        totalRevenue: billingStats.totalAmount || 0,
+        growthRate: performanceStats.growthRate,
+      },
+    };
+  }
+
+  async getOverviewStats(clinicId?: number) {
+    const today = new Date();
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    // Estadísticas rápidas para widgets
+    const todayAppointments = await this.appointmentRepository.count({
+      where: {
+        appointmentDate: today,
+        ...(clinicId && { clinicId }),
+      },
+    });
+
+    const totalPatients = await this.patientRepository.count({
+      where: {
+        ...(clinicId && { clinicId }),
+      },
+    });
+
+    const monthlyAppointments = await this.appointmentRepository.count({
+      where: {
+        appointmentDate: startOfMonth,
+        ...(clinicId && { clinicId }),
+      },
+    });
+
+    const recentMedicalRecords = await this.medicalRecordRepository.count({
+      where: {
+        createdAt: startOfMonth,
+        ...(clinicId && { clinicId }),
+      },
+    });
+
+    return {
+      todayAppointments,
+      totalPatients,
+      monthlyAppointments,
+      recentMedicalRecords,
+    };
+  }
+
+  private getStartDate(endDate: Date, period: string): Date {
+    const date = new Date(endDate);
+    switch (period) {
+      case "day":
+        return new Date(date.setHours(0, 0, 0, 0));
+      case "week":
+        const dayOfWeek = date.getDay();
+        const diff = date.getDate() - dayOfWeek;
+        return new Date(date.setDate(diff));
+      case "year":
+        return new Date(date.getFullYear(), 0, 1);
+      default: // month
+        return new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+  }
+
+  private async getDoctorAppointmentStats(
+    doctorId: number,
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    const whereConditions: any = {
+      doctorId,
+      appointmentDate: Between(startDate, endDate),
+    };
+
+    if (clinicId) {
+      whereConditions.clinicId = clinicId;
+    }
+
+    const total = await this.appointmentRepository.count({
+      where: whereConditions,
+    });
+
+    const completed = await this.appointmentRepository.count({
+      where: {
+        ...whereConditions,
+        status: "completed",
+      },
+    });
+
+    const cancelled = await this.appointmentRepository.count({
+      where: {
+        ...whereConditions,
+        status: "cancelled",
+      },
+    });
+
+    const pending = await this.appointmentRepository.count({
+      where: {
+        ...whereConditions,
+        status: "scheduled",
+      },
+    });
+
+    return {
+      total,
+      completed,
+      cancelled,
+      pending,
+      completionRate: total > 0 ? (completed / total) * 100 : 0,
+    };
+  }
+
+  private async getDoctorPatientStats(
+    doctorId: number,
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    // Obtener pacientes que tuvieron citas con este doctor en el período
+    const whereConditions: any = {
+      doctorId,
+      appointmentDate: Between(startDate, endDate),
+    };
+
+    if (clinicId) {
+      whereConditions.clinicId = clinicId;
+    }
+
+    const appointments = await this.appointmentRepository.find({
+      where: whereConditions,
+      relations: ["patient"],
+    });
+
+    const uniquePatients = new Set(appointments.map((apt) => apt.patientId));
+    const newPatients = appointments.filter(
+      (apt) => apt.patient?.createdAt && apt.patient.createdAt >= startDate,
+    );
+
+    return {
+      total: uniquePatients.size,
+      new: newPatients.length,
+      returning: uniquePatients.size - newPatients.length,
+    };
+  }
+
+  private async getDoctorBillingStats(
+    doctorId: number,
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    // Esta lógica dependerá de cómo esté estructurada la facturación
+    // Por ahora retornamos valores por defecto
+    return {
+      totalRevenue: 0,
+      pending: 0,
+      paid: 0,
+      overdue: 0,
+    };
+  }
+
+  private async getDoctorUpcomingAppointments(
+    doctorId: number,
+    clinicId?: number,
+  ) {
+    const today = new Date();
+    const whereConditions: any = {
+      doctorId,
+      appointmentDate: MoreThanOrEqual(today),
+      status: "scheduled",
+    };
+
+    if (clinicId) {
+      whereConditions.clinicId = clinicId;
+    }
+
+    return await this.appointmentRepository.find({
+      where: whereConditions,
+      relations: ["patient"],
+      order: { appointmentDate: "ASC" },
+      take: 5,
+    });
+  }
+
+  private async getDoctorRecentMedicalRecords(
+    doctorId: number,
+    clinicId?: number,
+  ) {
+    return await this.medicalRecordRepository.find({
+      where: {
+        doctorId,
+        ...(clinicId && { clinicId }),
+      },
+      relations: ["patient"],
+      order: { createdAt: "DESC" },
+      take: 5,
+    });
+  }
+
+  private async getAppointmentStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    const whereConditions: any = {
+      appointmentDate: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    };
+
+    if (clinicId) {
+      whereConditions.clinicId = clinicId;
+    }
+
+    const total = await this.appointmentRepository.count({
+      where: whereConditions,
+    });
+
+    const completed = await this.appointmentRepository.count({
+      where: {
+        ...whereConditions,
+        status: "completed",
+      },
+    });
+
+    const cancelled = await this.appointmentRepository.count({
+      where: {
+        ...whereConditions,
+        status: "cancelled",
+      },
+    });
+
+    return {
+      total,
+      completed,
+      cancelled,
+      pending: total - completed - cancelled,
+    };
+  }
+
+  private async getPatientStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    const whereConditions: any = {};
+
+    if (clinicId) {
+      whereConditions.clinicId = clinicId;
+    }
+
+    const total = await this.patientRepository.count({
+      where: whereConditions,
+    });
+
+    const newPatients = await this.patientRepository.count({
+      where: {
+        ...whereConditions,
+        createdAt: {
+          $gte: startDate,
+          $lte: endDate,
+        },
+      },
+    });
+
+    return {
+      total,
+      new: newPatients,
+      returning: total - newPatients,
+    };
+  }
+
+  private async getDoctorStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    // Esta lógica necesitará acceso al módulo de usuarios/doctores
+    // Por ahora retornamos valores por defecto
+    return {
+      active: 0,
+      totalConsultations: 0,
+      averageRating: 0,
+    };
+  }
+
+  // Nuevos métodos para el dashboard de administrador
+  private async getSystemStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    const totalUsers = await this.userRepository.count();
+    const newUsers = await this.userRepository.count({
+      where: {
+        createdAt: Between(startDate, endDate),
+      },
+    });
+
+    const totalClinics = await this.clinicRepository.count();
+    const activeClinics = await this.clinicRepository.count({
+      where: {
+        status: ClinicStatus.ACTIVE,
+      },
+    });
+
+    return {
+      totalUsers,
+      newUsers,
+      totalClinics,
+      activeClinics,
+      systemUptime: "99.9%", // Esto podría calcularse dinámicamente
+      lastBackup: new Date(), // Esto vendría de configuración
+    };
+  }
+
+  private async getClinicStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    if (clinicId) {
+      // Si se especifica una clínica, devolver stats de esa clínica específica
+      const clinic = await this.clinicRepository.findOne({
+        where: { id: clinicId },
+      });
+
+      if (!clinic) {
+        throw new Error("Clínica no encontrada");
+      }
+
+      return {
+        total: 1,
+        active: clinic.status === ClinicStatus.ACTIVE ? 1 : 0,
+        clinicDetails: {
+          id: clinic.id,
+          name: clinic.name,
+          address: clinic.address,
+          phone: clinic.phoneNumber,
+          status: clinic.status,
+          email: clinic.email,
+        },
+      };
+    }
+
+    // Stats generales de todas las clínicas
+    const total = await this.clinicRepository.count();
+    const active = await this.clinicRepository.count({
+      where: { status: ClinicStatus.ACTIVE },
+    });
+
+    const topClinics = await this.clinicRepository
+      .createQueryBuilder("clinic")
+      .leftJoinAndSelect("clinic.appointments", "appointment")
+      .where("appointment.appointmentDate BETWEEN :startDate AND :endDate", {
+        startDate,
+        endDate,
+      })
+      .groupBy("clinic.id")
+      .orderBy("COUNT(appointment.id)", "DESC")
+      .limit(5)
+      .getMany();
+
+    return {
+      total,
+      active,
+      inactive: total - active,
+      topPerforming: topClinics.map((clinic) => ({
+        id: clinic.id,
+        name: clinic.name,
+        appointmentsCount: 0, // Se calculará con una consulta separada
+      })),
+    };
+  }
+
+  private async getUserStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    let whereCondition = {};
+
+    if (clinicId) {
+      whereCondition = { clinicId };
+    }
+
+    const total = await this.userRepository.count({ where: whereCondition });
+
+    const doctors = await this.userRepository.count({
+      where: { ...whereCondition, role: UserRole.DOCTOR },
+    });
+
+    const nurses = await this.userRepository.count({
+      where: { ...whereCondition, role: UserRole.NURSE },
+    });
+
+    const admins = await this.userRepository.count({
+      where: { ...whereCondition, role: UserRole.ADMIN },
+    });
+
+    const newUsers = await this.userRepository.count({
+      where: {
+        ...whereCondition,
+        createdAt: Between(startDate, endDate),
+      },
+    });
+
+    // Asumiendo que User tiene una propiedad status
+    const activeUsers = total; // Por ahora usamos total, se puede refinar
+
+    return {
+      total,
+      doctors,
+      nurses,
+      admins,
+      newUsers,
+      activeUsers,
+      inactiveUsers: total - activeUsers,
+      distribution: {
+        doctors: total > 0 ? Math.round((doctors / total) * 100) : 0,
+        nurses: total > 0 ? Math.round((nurses / total) * 100) : 0,
+        admins: total > 0 ? Math.round((admins / total) * 100) : 0,
+      },
+    };
+  }
+
+  private async getClinicStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    if (clinicId) {
+      // Si se especifica una clínica, devolver stats de esa clínica específica
+      const clinic = await this.clinicRepository.findOne({
+        where: { id: clinicId },
+        relations: ['appointments', 'patients'],
+      });
+
+      if (!clinic) {
+        throw new Error('Clínica no encontrada');
+      }
+
+      return {
+        total: 1,
+        active: clinic.isActive ? 1 : 0,
+        clinicDetails: {
+          id: clinic.id,
+          name: clinic.name,
+          address: clinic.address,
+          phone: clinic.phone,
+          isActive: clinic.isActive,
+          totalAppointments: clinic.appointments?.length || 0,
+          totalPatients: clinic.patients?.length || 0,
+        },
+      };
+    }
+
+    // Stats generales de todas las clínicas
+    const total = await this.clinicRepository.count();
+    const active = await this.clinicRepository.count({
+      where: { isActive: true },
+    });
+
+    const topClinics = await this.clinicRepository
+      .createQueryBuilder('clinic')
+      .leftJoinAndSelect('clinic.appointments', 'appointment')
+      .where('appointment.appointmentDate BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .groupBy('clinic.id')
+      .orderBy('COUNT(appointment.id)', 'DESC')
+      .limit(5)
+      .getMany();
+
+    return {
+      total,
+      active,
+      inactive: total - active,
+      topPerforming: topClinics.map(clinic => ({
+        id: clinic.id,
+        name: clinic.name,
+        appointmentsCount: clinic.appointments?.length || 0,
+      })),
+    };
+  }
+
+  private async getUserStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    let whereCondition = {};
+    
+    if (clinicId) {
+      whereCondition = { clinicId };
+    }
+
+    const total = await this.userRepository.count({ where: whereCondition });
+    
+    const doctors = await this.userRepository.count({
+      where: { ...whereCondition, role: 'DOCTOR' },
+    });
+
+    const nurses = await this.userRepository.count({
+      where: { ...whereCondition, role: 'NURSE' },
+    });
+
+    const admins = await this.userRepository.count({
+      where: { ...whereCondition, role: 'ADMIN' },
+    });
+
+    const newUsers = await this.userRepository.count({
+      where: {
+        ...whereCondition,
+        createdAt: Between(startDate, endDate),
+      },
+    });
+
+    const activeUsers = await this.userRepository.count({
+      where: { ...whereCondition, isActive: true },
+    });
+
+    return {
+      total,
+      doctors,
+      nurses,
+      admins,
+      newUsers,
+      activeUsers,
+      inactiveUsers: total - activeUsers,
+      distribution: {
+        doctors: Math.round((doctors / total) * 100),
+        nurses: Math.round((nurses / total) * 100),
+        admins: Math.round((admins / total) * 100),
+      },
+    };
+  }
+
+  private async getPerformanceStats(
+    startDate: Date,
+    endDate: Date,
+    clinicId?: number,
+  ) {
+    // Calcular crecimiento mes a mes
+    const previousPeriodStart = new Date(startDate);
+    previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 1);
+    const previousPeriodEnd = new Date(endDate);
+    previousPeriodEnd.setMonth(previousPeriodEnd.getMonth() - 1);
+
+    const currentAppointments = await this.appointmentRepository.count({
+      where: {
+        appointmentDate: Between(startDate, endDate),
+        ...(clinicId && { clinicId }),
+      },
+    });
+
+    const previousAppointments = await this.appointmentRepository.count({
+      where: {
+        appointmentDate: Between(previousPeriodStart, previousPeriodEnd),
+        ...(clinicId && { clinicId }),
+      },
+    });
+
+    const growthRate = previousAppointments > 0 
+      ? Math.round(((currentAppointments - previousAppointments) / previousAppointments) * 100)
+      : 0;
+
+    // Top doctores por citas completadas
+    const topDoctors = await this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .innerJoin('appointment.doctor', 'doctor')
+      .innerJoin('doctor.user', 'user')
+      .select([
+        'user.id as doctorId',
+        'user.firstName as firstName',
+        'user.lastName as lastName',
+        'COUNT(appointment.id) as appointmentsCount',
+      ])
+      .where('appointment.status = :status', { status: 'completed' })
+      .andWhere('appointment.appointmentDate BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .andWhere(clinicId ? 'appointment.clinicId = :clinicId' : '1=1', { clinicId })
+      .groupBy('user.id, user.firstName, user.lastName')
+      .orderBy('appointmentsCount', 'DESC')
+      .limit(5)
+      .getRawMany();
+
+    // Distribución de citas por día de la semana
+    const appointmentsByDay = await this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .select([
+        'EXTRACT(DOW FROM appointment.appointmentDate) as dayOfWeek',
+        'COUNT(*) as count',
+      ])
+      .where('appointment.appointmentDate BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .andWhere(clinicId ? 'appointment.clinicId = :clinicId' : '1=1', { clinicId })
+      .groupBy('dayOfWeek')
+      .orderBy('dayOfWeek')
+      .getRawMany();
+
+    return {
+      growthRate,
+      topDoctors: topDoctors.map(doctor => ({
+        id: doctor.doctorId,
+        name: `${doctor.firstName} ${doctor.lastName}`,
+        appointmentsCount: parseInt(doctor.appointmentsCount),
+      })),
+      appointmentsByDay: appointmentsByDay.map(day => ({
+        day: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][day.dayOfWeek],
+        count: parseInt(day.count),
+      })),
+      trends: {
+        appointments: {
+          current: currentAppointments,
+          previous: previousAppointments,
+          growth: growthRate,
+        },
+      },
+    };
+  }
+}
