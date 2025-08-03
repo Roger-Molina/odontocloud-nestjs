@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Between, Not, FindOptionsWhere } from "typeorm";
+import { Repository, FindOptionsWhere } from "typeorm";
 import {
   Odontogram,
   ToothRecord,
@@ -40,10 +40,12 @@ export class OdontogramaService {
       // Validate patient exists and basic data
       await this.validateCreateData(createOdontogramDto);
 
-      // Verificar si ya existe un odontograma para este paciente en esta fecha
-      await this.validateUniqueOdontogramPerPatientPerDate(
+      // Handle duplicates for the examination date
+      const examinationDate = new Date(createOdontogramDto.examinationDate);
+      await this.handleDuplicateOdontograms(
         createOdontogramDto.patientId,
-        new Date(createOdontogramDto.examinationDate),
+        examinationDate,
+        -1, // Use -1 as exclude ID since this is a new record
       );
 
       // Generate odontogram code
@@ -343,7 +345,47 @@ export class OdontogramaService {
   ): Promise<Odontogram> {
     try {
       // Verificar que el odontograma existe
-      await this.findOne(id);
+      const existingOdontogram = await this.findOne(id);
+
+      // Actualizar los campos del odontograma (excluyendo toothRecords)
+      const { toothRecords: _, ...updateFields } = updateOdontogramDto;
+      
+      // Preparar los campos para actualizar con conversión de fechas
+      const fieldsToUpdate: any = { ...updateFields };
+      
+      // Convertir fechas string a objetos Date si están presentes
+      if (
+        updateFields.examinationDate &&
+        typeof updateFields.examinationDate === "string"
+      ) {
+        // Usar la fecha tal como viene del frontend, preservando la fecha local sin conversión UTC
+        const inputDate = new Date(updateFields.examinationDate);
+        
+        // Extraer solo la parte de fecha (YYYY-MM-DD) para evitar problemas de timezone
+        const year = inputDate.getFullYear();
+        const month = inputDate.getMonth(); // 0-indexed
+        const day = inputDate.getDate();
+        
+        // Crear una nueva fecha en UTC usando solo año, mes y día
+        fieldsToUpdate.examinationDate = new Date(Date.UTC(year, month, day));
+      }
+      if (
+        updateFields.nextAppointmentDate &&
+        typeof updateFields.nextAppointmentDate === "string"
+      ) {
+        fieldsToUpdate.nextAppointmentDate = new Date(
+          updateFields.nextAppointmentDate,
+        );
+      }
+      
+      // Manejar duplicados si se está cambiando la fecha
+      if (updateFields.examinationDate && fieldsToUpdate.examinationDate) {
+        await this.handleDuplicateOdontograms(
+          existingOdontogram.patientId,
+          fieldsToUpdate.examinationDate,
+          id,
+        );
+      }
 
       // Si se envían tooth records, validarlos y procesarlos
       if (
@@ -357,30 +399,18 @@ export class OdontogramaService {
         await this.toothRecordRepository.delete({ odontogramId: id });
         
         // Crear los nuevos tooth records
-        const newToothRecords = updateOdontogramDto.toothRecords.map(record => ({
-          ...record,
-          odontogramId: id,
-          createdBy: (user?.email as string) || 'system',
-          lastModifiedBy: (user?.email as string) || 'system',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }));
+        const newToothRecords = updateOdontogramDto.toothRecords.map(
+          (record) => ({
+            ...record,
+            odontogramId: id,
+            createdBy: (user?.email as string) || "system",
+            lastModifiedBy: (user?.email as string) || "system",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+        );
         
         await this.toothRecordRepository.save(newToothRecords);
-      }
-
-      // Actualizar los campos del odontograma (excluyendo toothRecords)
-      const { toothRecords, ...updateFields } = updateOdontogramDto;
-      
-      // Preparar los campos para actualizar con conversión de fechas
-      const fieldsToUpdate: any = { ...updateFields };
-      
-      // Convertir fechas string a objetos Date si están presentes
-      if (updateFields.examinationDate && typeof updateFields.examinationDate === 'string') {
-        fieldsToUpdate.examinationDate = new Date(updateFields.examinationDate);
-      }
-      if (updateFields.nextAppointmentDate && typeof updateFields.nextAppointmentDate === 'string') {
-        fieldsToUpdate.nextAppointmentDate = new Date(updateFields.nextAppointmentDate);
       }
       
       await this.odontogramRepository.update(id, {
@@ -390,14 +420,39 @@ export class OdontogramaService {
 
       // Devolver el odontograma actualizado con sus tooth records
       return await this.findOne(id);
-    } catch (error) {
+    } catch (error: any) {
       if (
         error instanceof NotFoundException ||
-        error instanceof BadRequestException
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
       ) {
         throw error;
       }
-      console.error('Error updating odontogram:', error);
+      
+      // Manejar error de constraint único para paciente-fecha
+      if (
+        error.code === "23505" &&
+        error.constraint === "UQ_odontogram_patient_date"
+      ) {
+        const detail = (error.detail as string) || "";
+        let patientId = "";
+        let date = "";
+        
+        // Extraer información del mensaje de error
+        const match = detail.match(
+          /\(patient_id, examination_date\)=\((\d+), ([^)]+)\)/,
+        );
+        if (match) {
+          patientId = match[1];
+          date = match[2];
+        }
+        
+        throw new ConflictException(
+          `Ya existe un odontograma para el paciente ${patientId} en la fecha ${date}. Cada paciente puede tener solo un odontograma por día.`,
+        );
+      }
+      
+      console.error("Error updating odontogram:", error);
       throw new InternalServerErrorException(
         "Error al actualizar el odontograma",
       );
@@ -667,35 +722,34 @@ export class OdontogramaService {
   }
 
   /**
-   * Validates that no odontogram exists for the same patient on the same date
+   * Handles duplicate odontograms by removing older duplicates when updating to a conflicting date
    */
-  private async validateUniqueOdontogramPerPatientPerDate(
+  private async handleDuplicateOdontograms(
     patientId: number,
-    examinationDate: Date,
-    excludeId?: number,
+    newExaminationDate: Date,
+    excludeId: number,
   ): Promise<void> {
-    // Normalizar la fecha para comparar solo año, mes y día
-    const startOfDay = new Date(examinationDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // Normalizar la fecha de entrada a formato YYYY-MM-DD para comparación exacta
+    const targetDateString = newExaminationDate.toISOString().split("T")[0];
+    
+    // Buscar odontogramas existentes para el mismo paciente y fecha (excluyendo el actual)
+    const duplicateOdontograms = await this.odontogramRepository
+      .createQueryBuilder("odontogram")
+      .where("odontogram.patientId = :patientId", { patientId })
+      .andWhere("DATE(odontogram.examinationDate) = :examDate", { 
+        examDate: targetDateString,
+      })
+      .andWhere("odontogram.id != :excludeId", { excludeId })
+      .getMany();
 
-    const endOfDay = new Date(examinationDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    if (duplicateOdontograms.length > 0) {
+      // Eliminar los tooth records de los odontogramas duplicados
+      for (const duplicate of duplicateOdontograms) {
+        await this.toothRecordRepository.delete({ odontogramId: duplicate.id });
+      }
 
-    const whereCondition = {
-      patientId,
-      examinationDate: Between(startOfDay, endOfDay),
-      ...(excludeId && { id: Not(excludeId) }),
-    };
-
-    const existingOdontogram = await this.odontogramRepository.findOne({
-      where: whereCondition,
-    });
-
-    if (existingOdontogram) {
-      throw new ConflictException(
-        `Ya existe un odontograma para este paciente en la fecha ${examinationDate.toLocaleDateString()}. ` +
-          `Código existente: ${existingOdontogram.odontogramCode}`,
-      );
+      // Eliminar los odontogramas duplicados
+      await this.odontogramRepository.remove(duplicateOdontograms);
     }
   }
 

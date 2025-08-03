@@ -31,7 +31,7 @@ export class DashboardController {
   }
 
   @Get("admin")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   getAdminDashboard(
     @CurrentUser() user: any,
     @Query("clinicId") clinicId?: number,
@@ -44,7 +44,7 @@ export class DashboardController {
   }
 
   @Get("overview")
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.DOCTOR, UserRole.NURSE)
   getOverviewStats(
     @CurrentUser() user: any,
     @Query("clinicId") clinicId?: number,

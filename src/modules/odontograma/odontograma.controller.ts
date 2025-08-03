@@ -106,6 +106,8 @@ export class OdontogramaController {
     @Body() updateOdontogramDto: UpdateOdontogramDto,
     @CurrentUser() user: any,
   ) {
+    console.log("[OdontogramaController] Updating odontogram with ID:", id);
+    console.log("[OdontogramaController] Update data:", updateOdontogramDto);
     return this.odontogramaService.update(id, updateOdontogramDto, user);
   }
 
