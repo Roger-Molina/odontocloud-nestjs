@@ -18,16 +18,22 @@ export class DashboardController {
 
   @Get("doctor")
   @Roles(UserRole.DOCTOR)
-  getDoctorDashboard(
+  async getDoctorDashboard(
     @CurrentUser() user: any,
     @Query("clinicId") clinicId?: number,
     @Query("period") period?: "day" | "week" | "month" | "year",
   ) {
-    return this.dashboardService.getDoctorDashboard(
-      user.id,
+    console.log('[DashboardController] User:', user);
+    console.log('[DashboardController] Params - clinicId:', clinicId, 'period:', period);
+    
+    const result = await this.dashboardService.getDoctorDashboard(
+      user.id, // Pasamos el userId, el service se encargará de obtener el doctorId
       clinicId,
       period || "month",
     );
+    
+    console.log('[DashboardController] Dashboard result:', JSON.stringify(result, null, 2));
+    return result;
   }
 
   @Get("admin")

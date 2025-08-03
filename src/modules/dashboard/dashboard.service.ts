@@ -36,18 +36,39 @@ export class DashboardService {
   ) {}
 
   async getDoctorDashboard(
-    doctorId: number,
+    userId: number,
     clinicId?: number,
     period: "day" | "week" | "month" | "year" = "month",
   ) {
+    // Obtener el doctorId desde la tabla Doctor usando el userId
+    const doctor = await this.doctorRepository.findOne({
+      where: { userId },
+    });
+
+    if (!doctor) {
+      throw new Error("Doctor no encontrado para este usuario");
+    }
+
+    const doctorId = doctor.id;
+    console.log('[DashboardService] User ID:', userId, 'Doctor ID:', doctorId);
+
     const today = new Date();
     const startDate = this.getStartDate(today, period);
+    
+    // Para el período mensual, usar el final del mes en lugar de hoy
+    let endDate = today;
+    if (period === "month") {
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Último día del mes
+      endDate.setHours(23, 59, 59, 999);
+    }
+    
+    console.log('[DashboardService] Date range:', { start: startDate, end: endDate, period });
 
     // Obtener estadísticas de citas del doctor
     const appointmentStats = await this.getDoctorAppointmentStats(
       doctorId,
       startDate,
-      today,
+      endDate,
       clinicId,
     );
 
@@ -55,7 +76,7 @@ export class DashboardService {
     const patientStats = await this.getDoctorPatientStats(
       doctorId,
       startDate,
-      today,
+      endDate,
       clinicId,
     );
 
@@ -63,7 +84,7 @@ export class DashboardService {
     const billingStats = await this.getDoctorBillingStats(
       doctorId,
       startDate,
-      today,
+      endDate,
       clinicId,
     );
 
@@ -80,7 +101,7 @@ export class DashboardService {
       period,
       dateRange: {
         start: startDate,
-        end: today,
+        end: endDate,
       },
       appointments: appointmentStats,
       patients: patientStats,
@@ -267,6 +288,8 @@ export class DashboardService {
       },
     });
 
+    console.log(`[DashboardService] Appointment stats for doctor ${doctorId}: Total: ${total}, Completed: ${completed}, Cancelled: ${cancelled}, Pending: ${pending}`);
+
     return {
       total,
       completed,
@@ -281,31 +304,44 @@ export class DashboardService {
     endDate: Date,
     clinicId?: number,
   ) {
-    // Por ahora retornamos estadísticas básicas
-    // En el futuro se puede expandir para incluir relaciones doctor-paciente
-    const whereConditions: any = {
-      createdAt: Between(startDate, endDate),
-    };
+    // Obtener todos los pacientes únicos que han tenido citas con este doctor
+    const uniquePatientsQuery = this.appointmentRepository
+      .createQueryBuilder("appointment")
+      .select("DISTINCT appointment.patientId", "patientId")
+      .where("appointment.doctorId = :doctorId", { doctorId });
 
     if (clinicId) {
-      whereConditions.clinicId = clinicId;
+      uniquePatientsQuery.andWhere("appointment.clinicId = :clinicId", { clinicId });
     }
 
-    const total = await this.patientRepository.count({
-      where: whereConditions,
-    });
+    const uniquePatients = await uniquePatientsQuery.getRawMany();
+    const totalPatients = uniquePatients.length;
 
-    const newPatients = await this.patientRepository.count({
-      where: {
-        ...whereConditions,
-        createdAt: Between(startDate, endDate),
-      },
-    });
+    // Obtener pacientes nuevos que tuvieron su primera cita con este doctor en el período
+    const newPatientsQuery = this.appointmentRepository
+      .createQueryBuilder("appointment")
+      .select("DISTINCT appointment.patientId", "patientId")
+      .addSelect("MIN(appointment.appointmentDate)", "firstAppointment")
+      .where("appointment.doctorId = :doctorId", { doctorId })
+      .groupBy("appointment.patientId")
+      .having("MIN(appointment.appointmentDate) BETWEEN :startDate AND :endDate", {
+        startDate,
+        endDate,
+      });
+
+    if (clinicId) {
+      newPatientsQuery.andWhere("appointment.clinicId = :clinicId", { clinicId });
+    }
+
+    const newPatients = await newPatientsQuery.getRawMany();
+    const newPatientsCount = newPatients.length;
+
+    console.log(`[DashboardService] Patient stats for doctor ${doctorId}: Total: ${totalPatients}, New: ${newPatientsCount}`);
 
     return {
-      total,
-      new: newPatients,
-      returning: total - newPatients,
+      total: totalPatients,
+      new: newPatientsCount,
+      returning: totalPatients - newPatientsCount,
     };
   }
 
@@ -315,11 +351,51 @@ export class DashboardService {
     endDate: Date,
     clinicId?: number,
   ) {
-    // Implementación básica - se puede expandir
+    // Obtener todas las citas del doctor en el período (incluyendo scheduled para testing)
+    const whereConditions: any = {
+      doctorId,
+      appointmentDate: Between(startDate, endDate),
+      // Temporalmente incluir citas programadas para testing
+      // status: "completed",
+    };
+
+    if (clinicId) {
+      whereConditions.clinicId = clinicId;
+    }
+
+    const allAppointments = await this.appointmentRepository.find({
+      where: whereConditions,
+    });
+
+    console.log(`[DashboardService] Found ${allAppointments.length} appointments for doctor ${doctorId}:`, 
+                allAppointments.map(a => ({ id: a.id, status: a.status, fee: a.consultationFee, date: a.appointmentDate })));
+
+    let totalRevenue = 0;
+    let pending = 0;
+    let paid = 0;
+
+    for (const appointment of allAppointments) {
+      // Usar la tarifa de consulta de la cita
+      const fee = parseFloat(appointment.consultationFee?.toString() || "0");
+      if (fee > 0) {
+        if (appointment.status === "completed") {
+          totalRevenue += fee;
+          paid += fee;
+        } else {
+          // Para citas programadas, considerarlas como pendientes
+          pending += fee;
+          totalRevenue += fee; // Incluir en revenue total para testing
+        }
+      }
+    }
+
+    console.log(`[DashboardService] Billing stats - Total: ${totalRevenue}, Paid: ${paid}, Pending: ${pending}`);
+
     return {
-      totalRevenue: 0,
-      pending: 0,
-      completed: 0,
+      totalRevenue,
+      pending,
+      paid,
+      overdue: 0,
     };
   }
 
