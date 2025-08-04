@@ -144,4 +144,13 @@ export class CreateMedicalRecordDto {
   @IsNumber()
   @IsOptional()
   appointmentId?: number;
+
+  // Relaciones many-to-many
+  @IsArray()
+  @IsOptional()
+  treatmentIds?: number[];
+
+  @IsArray()
+  @IsOptional()
+  diagnosisIds?: number[];
 }

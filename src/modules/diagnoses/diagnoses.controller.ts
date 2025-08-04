@@ -7,8 +7,7 @@ import {
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
-import { CurrentUser } from "../auth/decorators/current-user.decorator";
-import { User, UserRole } from "../users/entities/user.entity";
+import { UserRole } from "../users/entities/user.entity";
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("diagnoses")
@@ -17,28 +16,19 @@ export class DiagnosesController {
 
   @Get()
   @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.RECEPTIONIST)
-  findAll(
-    @CurrentUser() user: User,
-    @Query("category") category?: DiagnosisCategory,
-  ) {
-    return this.diagnosesService.findAll(user.clinicId!, category);
+  findAll(@Query("category") category?: DiagnosisCategory) {
+    return this.diagnosesService.findAll(category);
   }
 
   @Get("by-category")
   @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.RECEPTIONIST)
-  findByCategory(
-    @CurrentUser() user: User,
-    @Query("category") category: DiagnosisCategory,
-  ) {
-    return this.diagnosesService.findByCategory(user.clinicId!, category);
+  findByCategory(@Query("category") category: DiagnosisCategory) {
+    return this.diagnosesService.findByCategory(category);
   }
 
   @Get("by-severity")
   @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.RECEPTIONIST)
-  findBySeverity(
-    @CurrentUser() user: User,
-    @Query("severity") severity: DiagnosisSeverity,
-  ) {
-    return this.diagnosesService.findBySeverity(user.clinicId!, severity);
+  findBySeverity(@Query("severity") severity: DiagnosisSeverity) {
+    return this.diagnosesService.findBySeverity(severity);
   }
 }

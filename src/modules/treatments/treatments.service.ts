@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, FindOptionsWhere } from "typeorm";
 import {
   Treatment,
   TreatmentCategory,
@@ -14,8 +14,8 @@ export class TreatmentsService {
     private treatmentRepository: Repository<Treatment>,
   ) {}
 
-  async findAll(clinicId: number, category?: TreatmentCategory) {
-    const where: any = { clinicId, status: TreatmentStatus.AVAILABLE };
+  async findAll(category?: TreatmentCategory) {
+    const where: FindOptionsWhere<Treatment> = { status: TreatmentStatus.AVAILABLE };
     if (category) {
       where.category = category;
     }
@@ -26,40 +26,33 @@ export class TreatmentsService {
     });
   }
 
-  async findByCategory(clinicId: number, category: TreatmentCategory) {
+  async findByCategory(category: TreatmentCategory) {
     return this.treatmentRepository.find({
-      where: { clinicId, category, status: TreatmentStatus.AVAILABLE },
+      where: { category, status: TreatmentStatus.AVAILABLE },
       order: { name: "ASC" },
     });
   }
 
-  async findOne(id: number, clinicId: number) {
+  async findOne(id: number) {
     return this.treatmentRepository.findOne({
-      where: { id, clinicId },
+      where: { id },
     });
   }
 
-  async create(createTreatmentDto: Partial<Treatment>, clinicId: number) {
-    const treatment = this.treatmentRepository.create({
-      ...createTreatmentDto,
-      clinicId,
-    });
+  async create(createTreatmentDto: Partial<Treatment>) {
+    const treatment = this.treatmentRepository.create(createTreatmentDto);
     return this.treatmentRepository.save(treatment);
   }
 
-  async update(
-    id: number,
-    updateTreatmentDto: Partial<Treatment>,
-    clinicId: number,
-  ) {
-    await this.treatmentRepository.update({ id, clinicId }, updateTreatmentDto);
-    return this.findOne(id, clinicId);
+  async update(id: number, updateTreatmentDto: Partial<Treatment>) {
+    await this.treatmentRepository.update({ id }, updateTreatmentDto);
+    return this.findOne(id);
   }
 
-  async remove(id: number, clinicId: number) {
+  async remove(id: number) {
     // Soft delete - mark as deprecated instead of removing
     return this.treatmentRepository.update(
-      { id, clinicId },
+      { id },
       { status: TreatmentStatus.DEPRECATED },
     );
   }

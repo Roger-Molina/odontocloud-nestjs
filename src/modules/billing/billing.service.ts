@@ -196,7 +196,28 @@ export class BillingService {
       throw new BadRequestException("Only pending invoices can be updated");
     }
 
-    await this.invoiceRepository.update(id, updateInvoiceDto);
+    // Separar items de los otros campos para evitar el error de TypeORM
+    const { items, ...invoiceData } = updateInvoiceDto;
+
+    // Actualizar los campos básicos de la factura (sin items)
+    if (Object.keys(invoiceData).length > 0) {
+      await this.invoiceRepository.update(id, invoiceData);
+    }
+
+    // Si se enviaron items, actualizar las relaciones por separado
+    if (items) {
+      // Eliminar items existentes
+      await this.invoiceItemRepository.delete({ invoiceId: id });
+
+      // Crear nuevos items
+      const newItems = items.map((item) => ({
+        ...item,
+        invoiceId: id,
+      }));
+      
+      await this.invoiceItemRepository.save(newItems);
+    }
+
     return this.findOne(id, clinicId);
   }
 

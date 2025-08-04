@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Like } from "typeorm";
+import { Repository, Like, In } from "typeorm";
 import { MedicalRecord } from "./entities/medical-record.entity";
 import { Doctor } from "../doctors/entities/doctor.entity";
+import { Treatment } from "../treatments/entities/treatment.entity";
+import { Diagnosis } from "../diagnoses/entities/diagnosis.entity";
 
 @Injectable()
 export class MedicalRecordsService {
@@ -11,6 +13,10 @@ export class MedicalRecordsService {
     private medicalRecordRepository: Repository<MedicalRecord>,
     @InjectRepository(Doctor)
     private doctorRepository: Repository<Doctor>,
+    @InjectRepository(Treatment)
+    private treatmentRepository: Repository<Treatment>,
+    @InjectRepository(Diagnosis)
+    private diagnosisRepository: Repository<Diagnosis>,
   ) {}
 
   async findAll(
@@ -47,7 +53,13 @@ export class MedicalRecordsService {
       take: options.limit || 50,
       skip: options.offset || 0,
       order: { createdAt: "DESC" },
-      relations: ["patient", "doctor", "appointment"],
+      relations: [
+        "patient",
+        "doctor",
+        "appointment",
+        "treatments",
+        "diagnoses",
+      ],
     });
   }
 
@@ -79,7 +91,7 @@ export class MedicalRecordsService {
       take: options.limit || 50,
       skip: options.offset || 0,
       order: { createdAt: "DESC" },
-      relations: ["doctor", "appointment"],
+      relations: ["doctor", "appointment", "treatments", "diagnoses"],
     });
   }
 
@@ -93,23 +105,57 @@ export class MedicalRecordsService {
   }
 
   async create(
-    createData: Partial<MedicalRecord>,
+    createData: Partial<MedicalRecord> & { treatmentIds?: number[]; diagnosisIds?: number[] },
     clinicId: number,
     createdBy: number,
   ) {
+    // Extraer IDs de tratamientos y diagnósticos
+    const { treatmentIds, diagnosisIds, ...recordData } = createData;
+    
+    // Crear el registro base
     const record = this.medicalRecordRepository.create({
-      ...createData,
+      ...recordData,
       clinicId,
       createdBy,
     });
 
-    return this.medicalRecordRepository.save(record);
+    // Guardar el registro primero
+    const savedRecord = await this.medicalRecordRepository.save(record);
+
+    // Agregar relaciones many-to-many si hay IDs
+    if (treatmentIds && treatmentIds.length > 0) {
+      const treatments = await this.treatmentRepository.find({
+        where: { id: In(treatmentIds) },
+      });
+      savedRecord.treatments = treatments;
+    }
+
+    if (diagnosisIds && diagnosisIds.length > 0) {
+      const diagnoses = await this.diagnosisRepository.find({
+        where: { id: In(diagnosisIds) },
+      });
+      savedRecord.diagnoses = diagnoses;
+    }
+
+    // Guardar nuevamente con las relaciones
+    if (treatmentIds?.length || diagnosisIds?.length) {
+      await this.medicalRecordRepository.save(savedRecord);
+    }
+
+    // Recargar con todas las relaciones para devolver
+    return this.findOne(savedRecord.id, clinicId);
   }
 
   async findOne(id: number, clinicId: number) {
     const record = await this.medicalRecordRepository.findOne({
       where: { id, clinicId },
-      relations: ["patient", "doctor", "appointment"],
+      relations: [
+        "patient",
+        "doctor",
+        "appointment",
+        "treatments",
+        "diagnoses",
+      ],
     });
 
     if (!record) {
@@ -121,12 +167,45 @@ export class MedicalRecordsService {
 
   async update(
     id: number,
-    updateData: Partial<MedicalRecord>,
+    updateData: Partial<MedicalRecord> & { treatmentIds?: number[]; diagnosisIds?: number[] },
     clinicId: number,
   ) {
     const record = await this.findOne(id, clinicId);
-    Object.assign(record, updateData);
-    return this.medicalRecordRepository.save(record);
+    
+    // Extraer IDs de tratamientos y diagnósticos
+    const { treatmentIds, diagnosisIds, ...recordData } = updateData;
+    
+    // Actualizar campos básicos
+    Object.assign(record, recordData);
+    
+    // Actualizar relaciones many-to-many si hay IDs
+    if (treatmentIds !== undefined) {
+      if (treatmentIds.length > 0) {
+        const treatments = await this.treatmentRepository.find({
+          where: { id: In(treatmentIds) },
+        });
+        record.treatments = treatments;
+      } else {
+        record.treatments = [];
+      }
+    }
+
+    if (diagnosisIds !== undefined) {
+      if (diagnosisIds.length > 0) {
+        const diagnoses = await this.diagnosisRepository.find({
+          where: { id: In(diagnosisIds) },
+        });
+        record.diagnoses = diagnoses;
+      } else {
+        record.diagnoses = [];
+      }
+    }
+
+    // Guardar con las relaciones actualizadas
+    await this.medicalRecordRepository.save(record);
+    
+    // Recargar con todas las relaciones para devolver
+    return this.findOne(id, clinicId);
   }
 
   async remove(id: number, clinicId: number) {

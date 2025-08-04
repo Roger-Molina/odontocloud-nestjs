@@ -151,7 +151,7 @@ export class BillingController {
   }
 
   @Delete("invoices/:id")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
   removeInvoice(
     @Request() req: AuthenticatedRequest,
     @Param("id", ParseIntPipe) id: number,

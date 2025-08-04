@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, FindOptionsWhere } from "typeorm";
 import {
   Diagnosis,
   DiagnosisCategory,
@@ -15,8 +15,8 @@ export class DiagnosesService {
     private diagnosisRepository: Repository<Diagnosis>,
   ) {}
 
-  async findAll(clinicId: number, category?: DiagnosisCategory) {
-    const where: any = { clinicId, status: DiagnosisStatus.ACTIVE };
+  async findAll(category?: DiagnosisCategory) {
+    const where: FindOptionsWhere<Diagnosis> = { status: DiagnosisStatus.ACTIVE };
     if (category) {
       where.category = category;
     }
@@ -27,47 +27,40 @@ export class DiagnosesService {
     });
   }
 
-  async findByCategory(clinicId: number, category: DiagnosisCategory) {
+  async findByCategory(category: DiagnosisCategory) {
     return this.diagnosisRepository.find({
-      where: { clinicId, category, status: DiagnosisStatus.ACTIVE },
+      where: { category, status: DiagnosisStatus.ACTIVE },
       order: { name: "ASC" },
     });
   }
 
-  async findBySeverity(clinicId: number, severity: DiagnosisSeverity) {
+  async findBySeverity(severity: DiagnosisSeverity) {
     return this.diagnosisRepository.find({
-      where: { clinicId, severity, status: DiagnosisStatus.ACTIVE },
+      where: { severity, status: DiagnosisStatus.ACTIVE },
       order: { name: "ASC" },
     });
   }
 
-  async findOne(id: number, clinicId: number) {
+  async findOne(id: number) {
     return this.diagnosisRepository.findOne({
-      where: { id, clinicId },
+      where: { id },
     });
   }
 
-  async create(createDiagnosisDto: Partial<Diagnosis>, clinicId: number) {
-    const diagnosis = this.diagnosisRepository.create({
-      ...createDiagnosisDto,
-      clinicId,
-    });
+  async create(createDiagnosisDto: Partial<Diagnosis>) {
+    const diagnosis = this.diagnosisRepository.create(createDiagnosisDto);
     return this.diagnosisRepository.save(diagnosis);
   }
 
-  async update(
-    id: number,
-    updateDiagnosisDto: Partial<Diagnosis>,
-    clinicId: number,
-  ) {
-    await this.diagnosisRepository.update({ id, clinicId }, updateDiagnosisDto);
-    return this.findOne(id, clinicId);
+  async update(id: number, updateDiagnosisDto: Partial<Diagnosis>) {
+    await this.diagnosisRepository.update({ id }, updateDiagnosisDto);
+    return this.findOne(id);
   }
 
-  async remove(id: number, clinicId: number) {
+  async remove(id: number) {
     // Soft delete - mark as inactive instead of removing
     return this.diagnosisRepository.update(
-      { id, clinicId },
+      { id },
       { status: DiagnosisStatus.INACTIVE },
     );
   }

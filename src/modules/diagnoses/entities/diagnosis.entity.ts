@@ -1,6 +1,5 @@
-import { Entity, Column, ManyToOne, JoinColumn, ManyToMany } from "typeorm";
+import { Entity, Column, ManyToMany } from "typeorm";
 import { BaseEntity } from "../../../common/entities/base.entity";
-import { Clinic } from "../../clinics/entities/clinic.entity";
 import { MedicalRecord } from "../../medical-records/entities/medical-record.entity";
 
 export enum DiagnosisCategory {
@@ -76,13 +75,7 @@ export class Diagnosis extends BaseEntity {
   })
   status: DiagnosisStatus;
 
-  @Column({ name: "clinic_id" })
-  clinicId: number;
-
-  @ManyToOne(() => Clinic)
-  @JoinColumn({ name: "clinic_id" })
-  clinic: Clinic;
-
+  // Relación many-to-many con registros médicos
   @ManyToMany(() => MedicalRecord, (medicalRecord) => medicalRecord.diagnoses)
   medicalRecords?: MedicalRecord[];
 }

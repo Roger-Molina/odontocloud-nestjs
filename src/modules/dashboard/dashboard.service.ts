@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Between } from "typeorm";
+import { Repository, Between, In } from "typeorm";
 import { OdontogramaService } from "../odontograma/odontograma.service";
 import { BillingService } from "../billing/billing.service";
 import { MedicalRecordsService } from "../medical-records/medical-records.service";
@@ -400,22 +400,31 @@ export class DashboardService {
   }
 
   private async getDoctorUpcomingAppointments(doctorId: number, clinicId?: number) {
+    const today = new Date();
+    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    
     const whereConditions: any = {
       doctorId,
-      appointmentDate: Between(new Date(), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
-      status: "scheduled",
+      appointmentDate: Between(today, nextWeek),
+      status: In(["scheduled", "confirmed"]), // Usar el operador In
     };
 
     if (clinicId) {
       whereConditions.clinicId = clinicId;
     }
 
-    return await this.appointmentRepository.find({
+    console.log("[DashboardService] Fetching upcoming appointments with conditions:", whereConditions);
+
+    const appointments = await this.appointmentRepository.find({
       where: whereConditions,
       relations: ["patient"],
       order: { appointmentDate: "ASC" },
       take: 10,
     });
+
+    console.log("[DashboardService] Found upcoming appointments:", appointments.length);
+    
+    return appointments;
   }
 
   private async getDoctorRecentMedicalRecords(doctorId: number, clinicId?: number) {
