@@ -149,7 +149,7 @@ export class DashboardService {
 
     // Estadísticas financieras
     const billingStats = await this.billingService.getBillingStats(
-      clinicId,
+      clinicId || 0,
       period,
     );
 
@@ -198,7 +198,7 @@ export class DashboardService {
     const patientStats = await this.getPatientStats(startOfMonth, today, clinicId);
 
     const billingStats = await this.billingService.getBillingStats(
-      clinicId,
+      clinicId || 0,
       "month",
     );
 

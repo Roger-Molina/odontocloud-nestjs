@@ -1,154 +1,100 @@
-import {
-  IsString,
-  IsNumber,
-  IsOptional,
-  IsEnum,
-  IsDateString,
-  IsPositive,
-  IsArray,
-  ValidateNested,
-  IsBoolean,
-  IsDecimal,
-  Min,
-  Max,
-} from "class-validator";
-import { Type } from "class-transformer";
-import {
-  InvoiceStatus,
-  PaymentMethod,
-  InvoiceType,
-  DiscountType,
-} from "../entities/billing.entity";
+import { IsNumber, IsOptional, IsString, IsDateString, IsArray, ValidateNested, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class InvoiceItemDto {
+export class CreateInvoiceItemDto {
+  @ApiProperty({ description: 'Descripción del item' })
   @IsString()
   description: string;
 
+  @ApiProperty({ description: 'Cantidad', minimum: 1 })
   @IsNumber()
-  @IsPositive()
+  @Min(1)
   quantity: number;
 
-  @IsNumber()
-  @IsPositive()
-  unitPrice: number;
-
-  @IsNumber()
-  @IsPositive()
-  totalPrice: number;
-
-  @IsOptional()
+  @ApiProperty({ description: 'Precio unitario', minimum: 0 })
   @IsNumber()
   @Min(0)
-  discountAmount?: number;
+  unitPrice: number;
 
+  @ApiPropertyOptional({ description: 'ID del tratamiento asociado' })
   @IsOptional()
   @IsNumber()
   treatmentId?: number;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  toothNumbers?: string[];
 }
 
 export class CreateInvoiceDto {
-  @IsDateString()
-  @IsOptional()
-  invoiceDate?: string;
-
-  @IsDateString()
-  @IsOptional()
-  dueDate?: string;
-
-  @IsOptional()
-  @IsEnum(InvoiceType)
-  type?: InvoiceType;
-
+  @ApiProperty({ description: 'ID de la clínica' })
   @IsNumber()
-  @IsPositive()
-  @IsOptional()
-  subtotal?: number;
+  clinicId: number;
 
+  @ApiProperty({ description: 'ID del paciente' })
+  @IsNumber()
+  patientId: number;
+
+  @ApiProperty({ description: 'ID del doctor' })
+  @IsNumber()
+  doctorId: number;
+
+  @ApiProperty({ description: 'ID del tipo de factura' })
+  @IsNumber()
+  invoiceTypeId: number;
+
+  @ApiProperty({ description: 'Fecha de la factura' })
+  @IsDateString()
+  invoiceDate: string;
+
+  @ApiProperty({ description: 'Fecha de vencimiento' })
+  @IsDateString()
+  dueDate: string;
+
+  @ApiProperty({ description: 'Subtotal', minimum: 0 })
+  @IsNumber()
+  @Min(0)
+  subtotal: number;
+
+  @ApiPropertyOptional({ description: 'Porcentaje de impuesto', minimum: 0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  taxRate?: number;
+
+  @ApiPropertyOptional({ description: 'Monto de impuesto', minimum: 0 })
   @IsOptional()
   @IsNumber()
   @Min(0)
   taxAmount?: number;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  taxRate?: number;
-
+  @ApiPropertyOptional({ description: 'Monto de descuento', minimum: 0 })
   @IsOptional()
   @IsNumber()
   @Min(0)
   discountAmount?: number;
 
+  @ApiPropertyOptional({ description: 'ID del tipo de descuento' })
   @IsOptional()
-  @IsEnum(DiscountType)
-  discountType?: DiscountType;
+  @IsNumber()
+  discountTypeId?: number;
 
-  @IsOptional()
+  @ApiProperty({ description: 'Monto total', minimum: 0 })
   @IsNumber()
   @Min(0)
-  discountValue?: number;
+  totalAmount: number;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  insuranceCovered?: number;
-
-  @IsNumber()
-  @IsPositive()
-  @IsOptional()
-  total?: number;
-
-  @IsOptional()
-  @IsEnum(InvoiceStatus)
-  status?: InvoiceStatus;
-
+  @ApiPropertyOptional({ description: 'Notas adicionales' })
   @IsOptional()
   @IsString()
   notes?: string;
 
-  @IsOptional()
-  @IsString()
-  internalNotes?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  paymentTerms?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  isRecurring?: boolean;
-
-  @IsOptional()
-  @IsString()
-  recurringFrequency?: string;
-
-  @IsNumber()
-  patientId: number;
-
-  @IsOptional()
-  @IsNumber()
-  appointmentId?: number;
-
-  @IsNumber()
-  clinicId: number;
-
-  @IsOptional()
-  @IsNumber()
-  doctorId?: number;
-
-  @IsOptional()
-  @IsNumber()
-  insurancePlanId?: number;
-
+  @ApiProperty({ 
+    type: [CreateInvoiceItemDto],
+    description: 'Items de la factura'
+  })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => InvoiceItemDto)
-  items: InvoiceItemDto[];
+  @Type(() => CreateInvoiceItemDto)
+  items: CreateInvoiceItemDto[];
 }
+
+// Mantengo como alias para compatibilidad con el código existente
+export { CreateInvoiceItemDto as InvoiceItemDto };

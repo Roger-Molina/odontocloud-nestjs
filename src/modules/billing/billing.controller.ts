@@ -54,7 +54,7 @@ export class BillingController {
       ...createInvoiceDto,
       clinicId: req.user.clinicId, // Use user's clinic
     };
-    return this.billingService.create(invoiceData);
+    return this.billingService.createInvoice(invoiceData);
   }
 
   @Post("invoices/from-treatments")
@@ -103,7 +103,7 @@ export class BillingController {
   @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
   findInvoicesByStatus(
     @Request() req: AuthenticatedRequest,
-    @Param("status") status: InvoiceStatus,
+    @Param("status") status: string,
   ) {
     return this.billingService.findByStatus(
       status,
@@ -147,7 +147,7 @@ export class BillingController {
     @Param("id", ParseIntPipe) id: number,
     @Body("reason") reason?: string,
   ) {
-    return this.billingService.cancel(id, reason, req.user.clinicId);
+    return this.billingService.cancel(id, reason || "Cancelada por el usuario", req.user.clinicId);
   }
 
   @Delete("invoices/:id")
@@ -192,5 +192,123 @@ export class BillingController {
   @HttpCode(HttpStatus.OK)
   markOverdueInvoices() {
     return this.billingService.markOverdueInvoices();
+  }
+
+  /* ============================================
+   * CATALOG ENDPOINTS
+   * ============================================ */
+
+  @Get("catalog/invoice-statuses")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  findAllInvoiceStatuses() {
+    return this.billingService.findAllInvoiceStatuses();
+  }
+
+  @Get("catalog/payment-methods")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  findAllPaymentMethods() {
+    return this.billingService.findAllPaymentMethods();
+  }
+
+  @Get("catalog/invoice-types")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  findAllInvoiceTypes() {
+    return this.billingService.findAllInvoiceTypes();
+  }
+
+  @Get("catalog/payment-statuses")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  findAllPaymentStatuses() {
+    return this.billingService.findAllPaymentStatuses();
+  }
+
+  @Get("catalog/discount-types")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  findAllDiscountTypes() {
+    return this.billingService.findAllDiscountTypes();
+  }
+
+  @Get("catalog/expense-categories")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  findAllExpenseCategories() {
+    return this.billingService.getExpenseCategories();
+  }
+
+  @Get("catalog/expense-statuses")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  findAllExpenseStatuses() {
+    return this.billingService.getExpenseStatuses();
+  }
+
+  /* ============================================
+   * EXPENSE ENDPOINTS
+   * ============================================ */
+
+  @Post("expenses")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  createExpense(
+    @Request() req: AuthenticatedRequest,
+    @Body() createExpenseDto: any,
+  ) {
+    return this.billingService.createExpense({
+      ...createExpenseDto,
+      clinicId: req.user.clinicId,
+      doctorId: req.user.role === UserRole.DOCTOR ? req.user.id : undefined,
+    });
+  }
+
+  @Get("expenses")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  findAllExpenses(
+    @Request() req: AuthenticatedRequest,
+    @Query("category") category?: string,
+    @Query("status") status?: string,
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const options = {
+      clinicId: req.user.clinicId,
+      category,
+      status,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    };
+
+    return this.billingService.findAllExpenses(options);
+  }
+
+  @Get("expenses/:id")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  findExpenseById(@Param("id", ParseIntPipe) id: number) {
+    return this.billingService.findExpenseById(id);
+  }
+
+  @Patch("expenses/:id")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  updateExpense(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() updateExpenseDto: any,
+  ) {
+    return this.billingService.updateExpense(id, updateExpenseDto);
+  }
+
+  // Mark expense as paid
+  @Patch("expenses/:id/pay")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  markExpenseAsPaid(@Param("id", ParseIntPipe) id: number, @Request() req: any) {
+    return this.billingService.markExpenseAsPaid(id, req.user.clinicId);
+  }
+
+  // Cancel expense
+  @Patch("expenses/:id/cancel")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  cancelExpense(@Param("id", ParseIntPipe) id: number, @Request() req: any) {
+    return this.billingService.cancelExpense(id, req.user.clinicId);
+  }
+
+  @Delete("expenses/:id")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  deleteExpense(@Param("id", ParseIntPipe) id: number) {
+    return this.billingService.deleteExpense(id);
   }
 }

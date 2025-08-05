@@ -5,54 +5,11 @@ import { Appointment } from "../../appointments/entities/appointment.entity";
 import { Doctor } from "../../doctors/entities/doctor.entity";
 import { Treatment } from "../../treatments/entities/treatment.entity";
 import { Clinic } from "../../clinics/entities/clinic.entity";
-
-export enum InvoiceStatus {
-  DRAFT = "draft",
-  PENDING = "pending",
-  PAID = "paid",
-  PARTIALLY_PAID = "partially_paid",
-  OVERDUE = "overdue",
-  CANCELLED = "cancelled",
-  REFUNDED = "refunded",
-}
-
-export enum PaymentMethod {
-  CASH = "cash",
-  CREDIT_CARD = "credit_card",
-  DEBIT_CARD = "debit_card",
-  BANK_TRANSFER = "bank_transfer",
-  INSURANCE = "insurance",
-  CHECK = "check",
-  PAYMENT_PLAN = "payment_plan",
-  MIXED = "mixed",
-}
-
-export enum InvoiceType {
-  TREATMENT = "treatment",
-  CONSULTATION = "consultation",
-  EMERGENCY = "emergency",
-  PREVENTIVE = "preventive",
-  AESTHETIC = "aesthetic",
-  ORTHODONTICS = "orthodontics",
-  SURGERY = "surgery",
-}
-
-export enum PaymentStatus {
-  PENDING = "pending",
-  COMPLETED = "completed",
-  FAILED = "failed",
-  CANCELLED = "cancelled",
-  REFUNDED = "refunded",
-}
-
-export enum DiscountType {
-  PERCENTAGE = "percentage",
-  FIXED_AMOUNT = "fixed_amount",
-  INSURANCE_COVERAGE = "insurance_coverage",
-  FAMILY_DISCOUNT = "family_discount",
-  EMPLOYEE_DISCOUNT = "employee_discount",
-  SENIOR_DISCOUNT = "senior_discount",
-}
+import { InvoiceStatus } from "./invoice-status.entity";
+import { PaymentMethod } from "./payment-method.entity";
+import { InvoiceType } from "./invoice-type.entity";
+import { PaymentStatus } from "./payment-status.entity";
+import { DiscountType } from "./discount-type.entity";
 
 @Entity("invoices")
 export class Invoice extends BaseEntity {
@@ -65,12 +22,15 @@ export class Invoice extends BaseEntity {
   @Column({ name: "due_date", type: "date" })
   dueDate: Date;
 
-  @Column({
-    type: "enum",
-    enum: InvoiceType,
-    default: InvoiceType.TREATMENT,
-  })
-  type: InvoiceType;
+  // Foreign Keys for catalog tables
+  @Column({ name: "invoice_type_id" })
+  invoiceTypeId: number;
+
+  @Column({ name: "invoice_status_id" })
+  invoiceStatusId: number;
+
+  @Column({ name: "discount_type_id", nullable: true })
+  discountTypeId?: number;
 
   @Column({
     name: "subtotal",
@@ -107,13 +67,6 @@ export class Invoice extends BaseEntity {
     default: 0,
   })
   discountAmount: number;
-
-  @Column({
-    type: "enum",
-    enum: DiscountType,
-    nullable: true,
-  })
-  discountType?: DiscountType;
 
   @Column({
     name: "discount_value",
@@ -158,13 +111,6 @@ export class Invoice extends BaseEntity {
     default: 0,
   })
   balanceDue: number;
-
-  @Column({
-    type: "enum",
-    enum: InvoiceStatus,
-    default: InvoiceStatus.PENDING,
-  })
-  status: InvoiceStatus;
 
   @Column({ type: "text", nullable: true })
   notes?: string;
@@ -234,6 +180,19 @@ export class Invoice extends BaseEntity {
   @ManyToOne(() => Doctor, { nullable: true })
   @JoinColumn({ name: "doctor_id" })
   doctor?: Doctor;
+
+  // Relations to catalog tables
+  @ManyToOne(() => InvoiceType)
+  @JoinColumn({ name: "invoice_type_id" })
+  invoiceType: InvoiceType;
+
+  @ManyToOne(() => InvoiceStatus)
+  @JoinColumn({ name: "invoice_status_id" })
+  invoiceStatus: InvoiceStatus;
+
+  @ManyToOne(() => DiscountType, { nullable: true })
+  @JoinColumn({ name: "discount_type_id" })
+  discountType?: DiscountType;
 
   @OneToMany(() => InvoiceItem, (item) => item.invoice, { cascade: true })
   items: InvoiceItem[];
@@ -308,15 +267,11 @@ export class Payment extends BaseEntity {
   })
   amount: number;
 
-  @Column({ type: "enum", enum: PaymentMethod })
-  method: PaymentMethod;
+  @Column({ name: "payment_method_id" })
+  paymentMethodId: number;
 
-  @Column({
-    type: "enum",
-    enum: PaymentStatus,
-    default: PaymentStatus.COMPLETED,
-  })
-  status: PaymentStatus;
+  @Column({ name: "payment_status_id" })
+  paymentStatusId: number;
 
   @Column({ name: "reference_number", nullable: true })
   referenceNumber?: string;
@@ -339,4 +294,19 @@ export class Payment extends BaseEntity {
   @ManyToOne(() => Invoice, (invoice) => invoice.payments)
   @JoinColumn({ name: "invoice_id" })
   invoice: Invoice;
+
+  @ManyToOne(() => PaymentMethod)
+  @JoinColumn({ name: "payment_method_id" })
+  paymentMethod: PaymentMethod;
+
+  @ManyToOne(() => PaymentStatus)
+  @JoinColumn({ name: "payment_status_id" })
+  paymentStatus: PaymentStatus;
 }
+
+// Re-export entities for backward compatibility
+export { InvoiceStatus } from "./invoice-status.entity";
+export { PaymentMethod } from "./payment-method.entity";
+export { InvoiceType } from "./invoice-type.entity";
+export { PaymentStatus } from "./payment-status.entity";
+export { DiscountType } from "./discount-type.entity";
