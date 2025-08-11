@@ -5,12 +5,14 @@ import {
   JoinColumn,
   ManyToMany,
   JoinTable,
+  OneToMany,
 } from "typeorm";
 import { BaseEntity } from "../../../common/entities/base.entity";
 import { User } from "../../users/entities/user.entity";
 import { DocumentType } from "./document-type.entity";
 import { BloodType as BloodTypeEntity } from "./blood-type.entity";
 import { Allergy } from "./allergy.entity";
+import { PatientDocument } from "./patient-document.entity";
 
 export enum Gender {
   MALE = "male",
@@ -87,6 +89,9 @@ export class Patient extends BaseEntity {
     inverseJoinColumn: { name: "allergy_id", referencedColumnName: "id" },
   })
   allergies?: Allergy[];
+
+  @OneToMany(() => PatientDocument, (document) => document.patient)
+  documents?: PatientDocument[];
 
   @Column({ name: "clinic_id", nullable: true })
   clinicId?: number;

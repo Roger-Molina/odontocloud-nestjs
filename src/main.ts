@@ -3,6 +3,8 @@ import { NestFactory, Reflector } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
 import { ValidationPipe } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import * as bodyParser from "body-parser";
+import * as multer from "multer";
 // Import class-validator to ensure it's loaded
 //import 'class-validator';
 import { AppModule } from "./app.module";
@@ -20,10 +22,32 @@ async function bootstrap() {
   // Set global prefix
   app.setGlobalPrefix(apiPrefix);
 
-  // Enable CORS
+  // Configure body parser limits for file uploads
+  app.use(bodyParser.json({ limit: "50mb" }));
+  app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
+
+  // Configure multer for handling multipart/form-data
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const upload = multer({
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB limit
+    },
+    storage: multer.memoryStorage(), // Store files in memory for processing
+  });
+
+  // Enable CORS with more specific configuration for file uploads
   app.enableCors({
     origin: "*", // Permite cualquier origen
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "Cache-Control",
+    ],
   });
 
   // Global validation pipe with explicit options
