@@ -95,4 +95,7 @@ export class Patient extends BaseEntity {
 
   @Column({ name: "clinic_id", nullable: true })
   clinicId?: number;
+
+  @Column({ name: "profile_photo_path", nullable: true })
+  profilePhotoPath?: string;
 }

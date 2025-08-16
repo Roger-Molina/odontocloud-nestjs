@@ -21,6 +21,8 @@ import { PatientNotesService } from "./services/patient-notes.service";
 import { PatientNotesController } from "./controllers/patient-notes.controller";
 import { PatientDocumentsService } from "./services/patient-documents.service";
 import { PatientDocumentsController } from "./controllers/patient-documents.controller";
+import { PatientProfilePhotoService } from "./services/patient-profile-photo.service";
+import { PatientProfilePhotoController } from "./controllers/patient-profile-photo.controller";
 
 @Module({
   imports: [
@@ -42,6 +44,7 @@ import { PatientDocumentsController } from "./controllers/patient-documents.cont
     AllergiesService,
     PatientNotesService,
     PatientDocumentsService,
+    PatientProfilePhotoService,
   ],
   controllers: [
     PatientsController,
@@ -50,6 +53,7 @@ import { PatientDocumentsController } from "./controllers/patient-documents.cont
     AllergiesController,
     PatientNotesController,
     PatientDocumentsController,
+    PatientProfilePhotoController,
   ],
   exports: [
     PatientsService,
@@ -58,6 +62,7 @@ import { PatientDocumentsController } from "./controllers/patient-documents.cont
     AllergiesService,
     PatientNotesService,
     PatientDocumentsService,
+    PatientProfilePhotoService,
   ],
 })
 export class PatientsModule {}
