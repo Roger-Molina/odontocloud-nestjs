@@ -25,7 +25,9 @@ import { RecordTypesModule } from "./modules/record-types/record-types.module";
 import { TreatmentsModule } from "./modules/treatments/treatments.module";
 import { DiagnosesModule } from "./modules/diagnoses/diagnoses.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
-
+import { BudgetsModule } from "./modules/budgets/budgets.module";
+import { CouponModule } from "./modules/coupons/coupon.module";
+ 
 @Module({
   imports: [
     // Configuration
@@ -54,6 +56,8 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
     TreatmentsModule,
     DiagnosesModule,
     BillingModule,
+    BudgetsModule,
+    CouponModule,
     InventoryModule,
     ReportsModule,
     OdontogramaModule,

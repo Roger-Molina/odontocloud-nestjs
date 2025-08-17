@@ -12,7 +12,10 @@ import {
   HttpCode,
   HttpStatus,
   Request,
+  Res,
+  Header,
 } from "@nestjs/common";
+import { Response } from "express";
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -118,6 +121,32 @@ export class BillingController {
     @Param("id", ParseIntPipe) id: number,
   ) {
     return this.billingService.findOne(id, req.user.clinicId);
+  }
+
+  @Get("invoices/:id/pdf")
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE)
+  async exportInvoiceToPDF(
+    @Request() req: AuthenticatedRequest,
+    @Param("id", ParseIntPipe) id: number,
+    @Res() res: Response,
+  ): Promise<void> {
+    try {
+      const pdfBuffer = await this.billingService.exportInvoiceToPDF(id);
+      
+      res.set({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="factura-${id}.pdf"`,
+        "Content-Length": pdfBuffer.length.toString(),
+      });
+      
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error("[BillingController] Error exporting invoice PDF:", error);
+      res.status(500).json({
+        message: "Error al exportar la factura a PDF",
+        error: error?.message || "Unknown error",
+      });
+    }
   }
 
   @Patch("invoices/:id")

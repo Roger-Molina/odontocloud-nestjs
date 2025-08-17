@@ -98,4 +98,7 @@ export class Patient extends BaseEntity {
 
   @Column({ name: "profile_photo_path", nullable: true })
   profilePhotoPath?: string;
+
+  @Column({ type: "text", name: "medical_alerts", nullable: true })
+  medicalAlerts?: string;
 }

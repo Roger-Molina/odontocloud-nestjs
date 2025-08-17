@@ -184,8 +184,10 @@ export class PatientProfilePhotoController {
 
       res.status(HttpStatus.OK).send(buffer);
     } catch {
+      // No logueamos como error ya que es un caso normal
       res.status(HttpStatus.NOT_FOUND).json({
         message: "Foto de perfil no encontrada",
+        error: "PROFILE_PHOTO_NOT_FOUND",
       });
     }
   }

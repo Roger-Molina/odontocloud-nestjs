@@ -11,6 +11,7 @@ import { DiscountType } from "./entities/discount-type.entity";
 import { Expense } from "./entities/expense.entity";
 import { ExpenseCategory } from "./entities/expense-category.entity";
 import { ExpenseStatus } from "./entities/expense-status.entity";
+import { PdfService } from "../../common/services/pdf.service";
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { ExpenseStatus } from "./entities/expense-status.entity";
       ExpenseStatus,
     ]),
   ],
-  providers: [BillingService],
+  providers: [BillingService, PdfService],
   controllers: [BillingController],
   exports: [BillingService],
 })

@@ -23,8 +23,8 @@ export enum TreatmentStatus {
 
 @Entity("treatments")
 export class Treatment extends BaseEntity {
-  @Column({ name: "treatment_code", unique: true })
-  treatmentCode: string;
+  @Column({ name: "treatment_code", unique: true, nullable: true })
+  treatmentCode?: string;
 
   @Column()
   name: string;
@@ -32,40 +32,12 @@ export class Treatment extends BaseEntity {
   @Column({ type: "text", nullable: true })
   description?: string;
 
-  @Column({ type: "enum", enum: TreatmentCategory })
-  category: TreatmentCategory;
-
   @Column({
-    name: "base_cost",
-    type: "decimal",
-    precision: 10,
-    scale: 2,
+    type: "enum",
+    enum: TreatmentCategory,
     nullable: true,
   })
-  baseCost?: number;
-
-  @Column({
-    name: "estimated_duration",
-    type: "int",
-    nullable: true,
-    comment: "Duration in minutes",
-  })
-  estimatedDuration?: number;
-
-  @Column({
-    name: "requires_anesthesia",
-    type: "boolean",
-    default: false,
-  })
-  requiresAnesthesia: boolean;
-
-  @Column({
-    name: "tooth_specific",
-    type: "boolean",
-    default: false,
-    comment: "Whether this treatment is applied to specific teeth",
-  })
-  toothSpecific: boolean;
+  category?: TreatmentCategory;
 
   @Column({
     type: "enum",

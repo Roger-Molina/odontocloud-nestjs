@@ -49,8 +49,10 @@ export class PatientProfilePhotoService {
       if (patient.profilePhotoPath) {
         try {
           await fs.unlink(patient.profilePhotoPath);
-        } catch (error) {
-          console.warn(`No se pudo eliminar la foto anterior: ${patient.profilePhotoPath}`);
+        } catch {
+          console.warn(
+            `No se pudo eliminar la foto anterior: ${patient.profilePhotoPath}`,
+          );
         }
       }
 
@@ -73,7 +75,9 @@ export class PatientProfilePhotoService {
       };
     } catch (error) {
       console.error("Error uploading profile photo:", error);
-      throw new InternalServerErrorException("Error al subir la foto de perfil");
+      throw new InternalServerErrorException(
+        "Error al subir la foto de perfil",
+      );
     }
   }
 
@@ -93,10 +97,16 @@ export class PatientProfilePhotoService {
     }
 
     try {
+      // Primero verificar si el archivo existe
+      await fs.access(patient.profilePhotoPath);
+      
       const buffer = await fs.readFile(patient.profilePhotoPath);
       
       // Determinar el tipo MIME basado en la extensión
-      const extension = patient.profilePhotoPath.split(".").pop()?.toLowerCase();
+      const extension = patient.profilePhotoPath
+        .split(".")
+        .pop()
+        ?.toLowerCase();
       let mimeType = "image/jpeg"; // default
       
       switch (extension) {
@@ -117,9 +127,21 @@ export class PatientProfilePhotoService {
       }
 
       return { buffer, mimeType };
-    } catch (error) {
+    } catch (error: any) {
+      // Si el archivo no existe, limpiar la referencia en la base de datos
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        await this.patientRepository.update(
+          { id: patientId, clinicId },
+          { profilePhotoPath: undefined },
+        );
+        throw new NotFoundException(
+          "Foto de perfil no encontrada - referencia limpiada",
+        );
+      }
+      
+      // Para otros errores, sí logueamos
       console.error("Error reading profile photo:", error);
-      throw new NotFoundException("Archivo de foto de perfil no encontrado");
+      throw new NotFoundException("Error al leer archivo de foto de perfil");
     }
   }
 
@@ -143,7 +165,10 @@ export class PatientProfilePhotoService {
       // Eliminar archivo físico
       await fs.unlink(patient.profilePhotoPath);
     } catch (error) {
-      console.warn(`No se pudo eliminar el archivo físico: ${patient.profilePhotoPath}`, error);
+      console.warn(
+        `No se pudo eliminar el archivo físico: ${patient.profilePhotoPath}`,
+        error,
+      );
     }
 
     // Actualizar el paciente para remover la referencia a la foto
@@ -160,6 +185,6 @@ export class PatientProfilePhotoService {
       select: ["id", "profilePhotoPath"],
     });
 
-    return !!(patient?.profilePhotoPath);
+    return !!patient?.profilePhotoPath;
   }
 }

@@ -132,6 +132,16 @@ export class CreatePatientDto {
   medicalHistory?: string;
 
   @ApiProperty({
+    description: "Alertas médicas importantes",
+    example:
+      "Alérgico a la penicilina, toma medicamentos para la presión arterial",
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  medicalAlerts?: string;
+
+  @ApiProperty({
     description:
       "ID de la clínica a la que pertenece el paciente (asignado automáticamente si el usuario tiene clínica)",
     example: 1,

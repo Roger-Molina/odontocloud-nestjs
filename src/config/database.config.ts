@@ -11,7 +11,7 @@ export default registerAs(
     password: process.env.DB_PASSWORD || "postgres",
     database: process.env.DB_NAME || process.env.DB_DATABASE || "multiclinica",
     entities: [__dirname + "/../**/*.entity{.ts,.js}"],
-    synchronize: true,
+    synchronize: true, // Habilitar sincronización automática
     logging: process.env.NODE_ENV === "development",
     migrations: [__dirname + "/../database/migrations/*{.ts,.js}"],
     migrationsRun: false, // Deshabilitar ejecución automática

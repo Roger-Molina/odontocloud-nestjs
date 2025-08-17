@@ -2,7 +2,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  InternalServerErrorException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between } from "typeorm";
 import { CreateInvoiceDto } from "./dto/create-invoice.dto";
@@ -15,6 +21,7 @@ import { PaymentStatus } from "./entities/payment-status.entity";
 import { DiscountType } from "./entities/discount-type.entity";
 import { ExpenseCategory } from "./entities/expense-category.entity";
 import { ExpenseStatus } from "./entities/expense-status.entity";
+import { PdfService } from "../../common/services/pdf.service";
 
 @Injectable()
 export class BillingService {
@@ -41,6 +48,7 @@ export class BillingService {
     private expenseCategoryRepository: Repository<ExpenseCategory>,
     @InjectRepository(ExpenseStatus)
     private expenseStatusRepository: Repository<ExpenseStatus>,
+    private pdfService: PdfService,
   ) {}
 
   async createInvoice(createInvoiceDto: CreateInvoiceDto): Promise<Invoice> {
@@ -61,12 +69,20 @@ export class BillingService {
 
     const savedInvoice = await this.invoiceRepository.save(invoice);
 
+    // Crear los items con el totalPrice calculado
     for (const itemDto of createInvoiceDto.items) {
+      const totalPrice = Number(itemDto.quantity) * Number(itemDto.unitPrice);
+      
       const item = this.invoiceItemRepository.create({
-        ...itemDto,
+        description: itemDto.description,
+        quantity: itemDto.quantity,
+        unitPrice: itemDto.unitPrice,
+        totalPrice: totalPrice,
+        discountAmount: 0, // Por defecto
+        treatmentId: itemDto.treatmentId || undefined,
         invoiceId: savedInvoice.id,
-        totalPrice: itemDto.quantity * itemDto.unitPrice
       });
+      
       await this.invoiceItemRepository.save(item);
     }
 
@@ -83,7 +99,7 @@ export class BillingService {
   async findOne(id: number, clinicId: number): Promise<Invoice> {
     const invoice = await this.invoiceRepository.findOne({
       where: { id, clinicId },
-      relations: ["items", "invoiceStatus", "invoiceType", "payments"]
+      relations: ["items", "invoiceStatus", "invoiceType", "payments", "patient"]
     });
 
     if (!invoice) {
@@ -450,6 +466,41 @@ export class BillingService {
       where: { isActive: true },
       order: { name: "ASC" },
     });
+  }
+
+  // Export invoice to PDF
+  async exportInvoiceToPDF(id: number): Promise<Buffer> {
+    try {
+      // Obtener la factura con la relación del paciente
+      const invoice = await this.invoiceRepository.findOne({
+        where: { id },
+        relations: ['patient', 'items']
+      });
+
+      if (!invoice) {
+        throw new NotFoundException(`Invoice with ID ${id} not found`);
+      }
+
+      // Formatear los datos para el PDF
+      const formattedInvoice = {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        createdAt: invoice.createdAt,
+        patient: invoice.patient,
+        items: invoice.items || [],
+        subtotal: invoice.subtotal,
+        discountAmount: invoice.discountAmount,
+        taxAmount: invoice.taxAmount,
+        totalAmount: invoice.totalAmount,
+        notes: invoice.notes
+      };
+
+      // Generar el PDF usando el servicio de PDF
+      return await this.pdfService.generateInvoicePdf(formattedInvoice);
+    } catch (error) {
+      console.error('[BillingService] Error exporting invoice to PDF:', error);
+      throw new InternalServerErrorException('Error exporting invoice to PDF');
+    }
   }
 
   private async generateExpenseNumber(): Promise<string> {
