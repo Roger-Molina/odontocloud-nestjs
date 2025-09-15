@@ -9,6 +9,8 @@ import {
 } from "typeorm";
 import { BaseEntity } from "../../../common/entities/base.entity";
 import { Patient } from "../../patients/entities/patient.entity";
+import { Budget } from "../../budgets/budget.entity";
+import { Treatment } from "../../treatments/entities/treatment.entity";
 
 export enum ToothStatus {
   HEALTHY = "healthy",
@@ -154,6 +156,55 @@ export class ToothRecord extends BaseEntity {
   @Column({ name: "last_modified_by", nullable: true })
   lastModifiedBy?: string;
 
+  // Nuevos campos para sincronización con presupuesto y facturación
+  @Column({ name: "treatment_id", nullable: true })
+  treatmentId?: number;
+
+  @Column({ name: "budget_item_id", nullable: true })
+  budgetItemId?: number;
+
+  @Column({ name: "invoice_item_id", nullable: true })
+  invoiceItemId?: number;
+
+  @Column({
+    name: "treatment_status",
+    type: "enum",
+    enum: ["pending", "in_progress", "completed", "cancelled"],
+    default: "pending",
+  })
+  treatmentStatus: string;
+
+  @Column({ name: "treatment_start_date", type: "date", nullable: true })
+  treatmentStartDate?: Date;
+
+  @Column({ name: "treatment_completion_date", type: "date", nullable: true })
+  treatmentCompletionDate?: Date;
+
+  @Column({
+    name: "actual_cost",
+    type: "decimal",
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: "Costo real del tratamiento realizado",
+  })
+  actualCost?: number;
+
+  @Column({
+    name: "is_billable",
+    default: true,
+    comment: "Si este registro puede ser facturado",
+  })
+  isBillable: boolean;
+
+  @Column({
+    name: "billing_notes",
+    type: "text",
+    nullable: true,
+    comment: "Notas específicas para facturación",
+  })
+  billingNotes?: string;
+
   @Column({ name: "odontogram_id" })
   odontogramId: number;
 
@@ -162,4 +213,9 @@ export class ToothRecord extends BaseEntity {
   })
   @JoinColumn({ name: "odontogram_id" })
   odontogram: Odontogram;
+
+  // Nuevas relaciones
+  @ManyToOne(() => Treatment, { nullable: true })
+  @JoinColumn({ name: "treatment_id" })
+  treatment?: Treatment;
 }

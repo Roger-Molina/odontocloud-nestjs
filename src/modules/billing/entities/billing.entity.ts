@@ -10,6 +10,8 @@ import { PaymentMethod } from "./payment-method.entity";
 import { InvoiceType } from "./invoice-type.entity";
 import { PaymentStatus } from "./payment-status.entity";
 import { DiscountType } from "./discount-type.entity";
+import { BudgetItem } from "../../budgets/budget-item.entity";
+import { ClinicTreatmentPrice } from "../../treatments/entities/clinic-treatment-price.entity";
 
 @Entity("invoices")
 export class Invoice extends BaseEntity {
@@ -240,6 +242,69 @@ export class InvoiceItem extends BaseEntity {
   @Column({ name: "tooth_numbers", type: "json", nullable: true })
   toothNumbers?: string[];
 
+  @Column({ name: "tooth_surfaces", type: "json", nullable: true })
+  toothSurfaces?: string[];
+
+  @Column({ name: "budget_item_id", nullable: true })
+  budgetItemId?: number;
+
+  @Column({ name: "odontogram_tooth_record_id", nullable: true })
+  odontogramToothRecordId?: number;
+
+  @Column({ name: "clinic_treatment_price_id", nullable: true })
+  clinicTreatmentPriceId?: number;
+
+  @Column({
+    name: "sessions_billed",
+    type: "int",
+    default: 1,
+    comment: "Número de sesiones facturadas",
+  })
+  sessionsBilled: number;
+
+  @Column({
+    name: "actual_duration_minutes",
+    type: "int",
+    nullable: true,
+    comment: "Duración real del tratamiento en minutos",
+  })
+  actualDurationMinutes?: number;
+
+  @Column({
+    name: "treatment_completion_date",
+    type: "date",
+    nullable: true,
+    comment: "Fecha de finalización del tratamiento",
+  })
+  treatmentCompletionDate?: Date;
+
+  @Column({
+    name: "anesthesia_used",
+    default: false,
+    comment: "Si se utilizó anestesia",
+  })
+  anesthesiaUsed: boolean;
+
+  @Column({
+    name: "anesthesia_cost",
+    type: "decimal",
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: "Costo de anestesia aplicado",
+  })
+  anesthesiaCost?: number;
+
+  @Column({
+    name: "material_cost",
+    type: "decimal",
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: "Costo de materiales utilizados",
+  })
+  materialCost?: number;
+
   @Column({ name: "invoice_id" })
   invoiceId: number;
 
@@ -250,6 +315,14 @@ export class InvoiceItem extends BaseEntity {
   @ManyToOne(() => Treatment, { nullable: true })
   @JoinColumn({ name: "treatment_id" })
   treatment?: Treatment;
+
+  @ManyToOne(() => BudgetItem, { nullable: true })
+  @JoinColumn({ name: "budget_item_id" })
+  budgetItem?: BudgetItem;
+
+  @ManyToOne(() => ClinicTreatmentPrice, { nullable: true })
+  @JoinColumn({ name: "clinic_treatment_price_id" })
+  clinicTreatmentPrice?: ClinicTreatmentPrice;
 }
 
 @Entity("payments")

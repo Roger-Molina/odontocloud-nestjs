@@ -37,15 +37,15 @@ export class Patient extends BaseEntity {
   @Column({ name: "second_last_name", nullable: true })
   secondLastName?: string;
 
-  @Column({ name: "document_type_id" })
-  documentTypeId: number;
+  @Column({ name: "document_type_id", nullable: true })
+  documentTypeId?: number;
 
-  @ManyToOne(() => DocumentType)
+  @ManyToOne(() => DocumentType, { nullable: true })
   @JoinColumn({ name: "document_type_id" })
-  documentType: DocumentType;
+  documentType?: DocumentType;
 
-  @Column({ name: "document_number" })
-  documentNumber: string;
+  @Column({ name: "document_number", nullable: true })
+  documentNumber?: string;
 
   @Column({ type: "date", name: "birth_date" })
   birthDate: Date;
@@ -101,4 +101,12 @@ export class Patient extends BaseEntity {
 
   @Column({ type: "text", name: "medical_alerts", nullable: true })
   medicalAlerts?: string;
+
+  @Column({
+    type: "text",
+    name: "observations",
+    nullable: true,
+    comment: "Observaciones generales del paciente",
+  })
+  observations?: string;
 }

@@ -42,15 +42,21 @@ export class CreatePatientDto {
   @ApiProperty({
     description: "ID del tipo de documento",
     example: 1,
+    required: false,
+    nullable: true,
   })
-  documentTypeId: number;
+  @IsOptional()
+  documentTypeId?: number;
 
   @ApiProperty({
     description: "Número de documento",
     example: "12345678",
+    required: false,
+    nullable: true,
   })
+  @IsOptional()
   @IsString()
-  documentNumber: string;
+  documentNumber?: string;
 
   @ApiProperty({
     description: "Fecha de nacimiento",
@@ -149,4 +155,14 @@ export class CreatePatientDto {
   })
   @IsOptional()
   clinicId?: number;
+
+  @ApiProperty({
+    description: "Observaciones generales del paciente",
+    example: "Paciente muy colaborador, prefiere citas matutinas",
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  observations?: string;
 }
